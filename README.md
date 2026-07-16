@@ -1,0 +1,27 @@
+# CareerOS
+
+Personal AI career operating system. Documentation lives in `docs/`.
+
+## Setup
+
+```bash
+pnpm install
+cp .env.example apps/web/.env.local
+# Edit apps/web/.env.local with your Supabase URL and anon key
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start dev server |
+| `pnpm build` | Production build |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | TypeScript check |
+
+Supabase: enable Email auth, set Site URL to `http://localhost:3000`, add redirect `http://localhost:3000/auth/callback`.
+
+Run the SQL in `supabase/migrations/20260716000001_create_profiles.sql` in the Supabase SQL Editor before testing onboarding.

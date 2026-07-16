@@ -1,0 +1,294 @@
+---
+description: CareerOS engineering philosophy, domain constraints, vertical-slice development, and learning-oriented agent behavior.
+alwaysApply: true
+---
+
+# CareerOS — Cursor Rules
+
+You are working on **CareerOS**: an AI-powered career operating system that answers one question — *"What is the highest-value thing to do right now, and why?"*
+
+The founder is transitioning **Mechanical Engineering → AI Engineering**. This repository is both a product and a deliberate learning artifact. Optimize for **long-term maintainability**, **honest system behavior**, and **incremental skill growth**.
+
+---
+
+## Project Philosophy
+
+### Docs are the source of truth
+
+- Treat **`docs/`** as the authoritative specification. Read the relevant documents before implementing.
+- **`PROJECT.md`** is the charter. **`docs/product/glossary.md`** defines canonical vocabulary — use exact domain terms in code, APIs, and UI copy.
+- Document map:
+  - `docs/product/` — vision, founder intent, philosophy, guiding principles, onboarding
+  - `docs/architecture/` — Decision Engine, Task Generation Engine
+  - `docs/domain/` — Career Graph, Skill Graph, AI engineering ontology
+  - `docs/implementation/implementation-roadmap.md` — **what must eventually exist** (requirements and constraints)
+  - `docs/decisions/` — ADRs for approved engineering choices
+
+### Never redesign without explicit approval
+
+- Do not change product scope, architecture, or domain models without **explicit user approval**.
+- Architecture docs are **constraints**, not a mandate to build everything immediately.
+- If a simpler approach still satisfies documented constraints, **propose it** — never silently diverge.
+- Significant decisions belong in `docs/decisions/` as ADRs (`0001-short-title.md`).
+
+### Follow the implementation roadmap
+
+- **`docs/implementation/implementation-roadmap.md`** defines the full target system: requirements, entities, relationships, and architectural decisions.
+- Use it to know **what** must exist eventually — not as permission to build all of it at once.
+- Implementation order follows **vertical milestones** (see Development Philosophy), not layer-by-layer construction.
+- When code and docs conflict after deliberate implementation learning, **code + ADRs take precedence** — then update docs to match.
+
+### Preserve consistency with the domain model
+
+**Career Graph** (assembled view of one user's professional state):
+
+| Component | Rule |
+|-----------|------|
+| Skill Graph | Single source of truth for **progress** (Principle 9) |
+| Roadmap | **Computed**, never persisted as source of truth (AR-01) |
+| Missions / Quests / Tasks | **Persisted** when committed to active work (AR-02) |
+| Mastery / Confidence | Change **only via Evidence** — no direct writes (AR-04) |
+| Reasoning Traces | **Immutable**, written at recommendation time (AR-05) |
+| Evidence, History | **Append-only** (AR-15) |
+
+**Terminology (use consistently):**
+
+- **Decision Engine** (not "Career Intelligence Engine" — deprecated)
+- **Task Generation Engine** = Recommendation Engine = Daily Task Engine
+- **Mentor Chat** = UI surface; **AI Mentor** = reasoning capability
+- **Skill Graph** = data; **Skill Tree** = visualization
+- **Confidence** inherits the **floor** of weakest input — never average away uncertainty (AR-07)
+
+**Mental model:** CareerOS is a **routing engine**, not a curriculum server. The map (Career Graph) is stored; the route (Roadmap) is recomputed.
+
+### V1 scope
+
+- One founder-user. Personal utility over market polish.
+- **In scope:** onboarding, skill graph visualization, daily task engine, mentor chat.
+- **Default no** when uncertain (Principle 3).
+- **Out of scope unless requested:** monetization, native mobile, external integrations, enterprise features, push notifications, calendar, LLM-generated task candidates from scratch.
+
+---
+
+## Development Philosophy
+
+### Build vertical slices
+
+- Deliver **thin, complete features** end-to-end: UI → API → database.
+- **Not:** database → backend → frontend → AI → integration as separate phases.
+- Each milestone leaves the application **runnable locally**.
+
+**Milestone sequence:**
+
+| # | Deliverable |
+|---|-------------|
+| M1 | Monorepo, Next.js, Tailwind, shadcn/ui, Supabase, auth, minimal dashboard (sign in → dashboard only) |
+| M2 | Onboarding saves answers to DB — **no Career Graph generation** |
+| M3 | Generate and store initial Career Graph |
+| M4 | Seed Skill Graph from ontology |
+| M5 | Deterministic Recommendation Engine — **no Claude API** |
+| M6 | Claude for explanation, mentor chat, reasoning trace prose only |
+
+### Keep the application runnable
+
+- After every change: app boots, auth works (when implemented), no broken build.
+- Do not merge partial work that prevents `pnpm dev` from running.
+- Prefer incremental commits that each leave the repo in a working state.
+
+### Prefer working software over perfect abstractions
+
+- Ship the smallest complete slice that produces **real signal**, not mock data (Principle 4).
+- A working ugly flow beats a polished flow with fake data.
+- No feature is done until the founder can **use it for a real decision** (Principle 6).
+
+### YAGNI
+
+- Do not build systems, tables, packages, or engines **not used by the current milestone**.
+- Do not scaffold "for later."
+- Defer: Recovery Engine, Opportunity Engine, automatic Reflection, full Risk Engine, separate `services/` deployables — until the core loop works.
+
+### Avoid premature optimization
+
+- No graph databases, message queues, caching layers, or ML scoring until measured need exists.
+- Postgres + recursive CTEs is sufficient for V1 Skill Graph traversal.
+- Optimize for **clarity and change**, not hypothetical scale.
+
+### Prefer deterministic implementations for V1
+
+- Task Generation Engine: **identical input → identical output** (AR-08).
+- Task candidates from **Template Library** (ontology Suggested Projects) (AR-09).
+- Scoring, gap identification, dependency gating: **rule-based**, not LLM-driven.
+- Claude arrives at **M6 only** — personalization prose, trace narrative, mentor chat (AR-10). Claude does **not** decide *what* to recommend in V1.
+
+### Never introduce unnecessary services or microservices
+
+- Default: **single Next.js app** (`apps/web`) + **Supabase** + **Claude** (server-side only) (Principle 7, AR-18).
+- Create `packages/*` only when the active milestone needs shared code.
+- `services/` stays empty until a proven monolith boundary failure.
+
+### Additional build rules
+
+- Store **facts**; compute recommendations and roadmaps on demand (Principle 8).
+- Fail **loud** on AI/API errors — never silently serve stale recommendations (Principle 13).
+- Update `docs/` when behavior or schema changes. New concepts → `glossary.md` first.
+
+---
+
+## Code Quality
+
+### TypeScript strict mode
+
+- `strict: true` in all `tsconfig` files.
+- No `any` without a one-line justification comment.
+- Shared types and enums in `packages/shared`, aligned with `docs/domain/` and `glossary.md`.
+- Validate env vars and API input with **Zod**.
+
+### Small reusable components
+
+- One responsibility per module and per React component.
+- Prefer composition over inheritance.
+- Extract hooks only when logic is reused twice with identical semantics.
+
+### Clear naming
+
+- Name after **domain concepts**: `SkillNode`, `Evidence`, `Goal`, `ReasoningTrace` — not `Manager`, `Handler`, `Utils`.
+- File names match exports. Folder structure follows feature or domain, not technical layer alone.
+
+### Strong typing
+
+- Prefer discriminated unions for state machines (e.g., Skill `status`, Task `status`).
+- Database row types derived from schema — avoid stringly-typed IDs in business logic.
+- API request/response types shared between client and server via `packages/shared`.
+
+### Avoid duplication
+
+- DRY, but **Rule of Three**: abstract only after the third genuine repetition.
+- No one-line helper files. No generic frameworks inside the app.
+
+### Explain complex logic
+
+- Most code should be self-documenting.
+- Comment **non-obvious business rules**: confidence tier ceilings, hard vs soft dependencies, why Roadmap is not stored, weighted Mastery updates.
+- Point to spec sections: e.g., `// skill-graph-schema.md §5.6`.
+- Complex pipelines (scoring, onboarding generation) deserve a module-level docblock with inputs, outputs, and invariants.
+
+### Data integrity (non-negotiable)
+
+- `user_id` on every user-scoped table from day one (Principle 10).
+- **RLS** enabled on all Supabase tables (AR-16).
+- Insert-only enforcement on Evidence, Reasoning Traces, History.
+- Server-only: Supabase service role, `ANTHROPIC_API_KEY` — never in client bundles (Principle 29).
+- Overrides logged as **signal**, not errors (Principle 18).
+- User data exportable in plain readable format (Principle 27).
+
+### UI standards
+
+- Every screen answers **one named user question** before build (Principle 15).
+- Show **Mastery** and **Confidence** as distinct dimensions (Principle 19).
+- **shadcn/ui** + **Tailwind** for V1. Minimal chrome until core loop works.
+- No dark patterns: no guilt streaks, artificial urgency, or engagement-maximizing nudges (Principle 21).
+
+---
+
+## AI Behaviour
+
+When implementing, always explain:
+
+1. **What changed** — files, behavior, user-visible effect.
+2. **Why** — which doc, milestone, or principle it serves.
+3. **Alternatives** — at least one simpler option considered.
+4. **Tradeoffs** — what you gain, what you defer, what you risk.
+5. **Engineering concept demonstrated** — e.g., vertical slice, RLS, server components, computed view, idempotency, append-only audit log.
+
+### Decision discipline
+
+- **Never silently make architectural decisions.**
+- **Pause before major refactors** — state scope, risk, rollback; wait for approval.
+- **Ask before changing public interfaces** — API routes, `packages/shared` exports, database schema, prompt contracts.
+- New dependencies require: problem solved, alternative rejected, milestone that needs it.
+
+### Product-aligned AI rules
+
+- Mentor Chat grounded in Career Graph + stored Reasoning Traces (Principle 25) — not a parallel chatbot.
+- AI must be able to say **"I don't know"** or **"I'm not confident"** (Principle 22).
+- Prompts in **`prompts/`**, versioned and reviewed like code (Principle 23).
+- AI presented as reasoning layer — never simulates human companionship (Principle 24).
+- State-mutating AI calls: **idempotent and auditable** (Principle 12).
+- Honesty over encouragement in logic and copy (product-philosophy §11).
+- Bias toward build-over-consume in task recommendations, but not dogmatically (Principle 26).
+
+### Agent scope per request
+
+- Implement **only the current milestone** unless user explicitly expands scope.
+- Do not commit, push, or install dependencies unless asked.
+- Meta-principle (31): principles constrain convenience, not judgment — if a principle must bend, **amend the doc with reasoning**, do not silently violate.
+
+---
+
+## Learning Mode
+
+The developer is transitioning from **Mechanical Engineering** into **AI Engineering**. Treat every implementation as **load-bearing practice** (`founder-intent.md`).
+
+### Teaching approach
+
+- **Teach incrementally** — one or two concepts per response.
+- **Do not overwhelm** — skip deep theory unless asked.
+- After important features, briefly explain applicable concepts:
+
+| Layer | Examples to cover when relevant |
+|-------|--------------------------------|
+| **React** | Components, props, state, hooks, effects, conditional rendering |
+| **Next.js** | App Router, layouts, server vs client components, route handlers, middleware |
+| **TypeScript** | Types, interfaces, unions, generics, narrowing, `strict` benefits |
+| **Database** | Tables, FKs, migrations, indexes, RLS, transactions, append-only patterns |
+| **System design** | Vertical slices, monolith-first, computed vs stored state, separation of concerns, audit trails |
+
+### Senior engineer framing
+
+When explaining, show how a senior engineer thinks:
+
+1. **Clarify constraints** — what docs say, what milestone allows, what must not break.
+2. **Simplest correct solution** — smallest vertical slice that satisfies constraints.
+3. **Defer complexity** — what not to build yet and why.
+4. **Optimize for change** — where the system will evolve (ontology updates, multi-user, Claude scope).
+5. **Verify honestly** — how to know it works; what signal proves success.
+
+Connect implementations to the AI engineering ontology when natural (e.g., RAG-like context assembly for Mentor Chat, graph traversal for Skill dependencies).
+
+---
+
+## Git Discipline
+
+- **Small commits** — one logical change each.
+- **Meaningful messages** — imperative mood, complete sentences, explain *why*:
+
+  ```
+  Add onboarding answer persistence for M2
+
+  Stores required interview responses in Supabase so later milestones
+  can generate the Career Graph from real data, per onboarding-intelligence.md.
+  ```
+
+- **Never leave the repository broken** — lint, typecheck, and local dev must pass before ending work.
+- No secrets in commits. Document env vars in `.env.example`.
+- **Only commit when the user explicitly requests it.**
+
+---
+
+## Architectural Quick Reference
+
+| ID | Rule |
+|----|------|
+| AR-01 | Roadmap computed, not stored |
+| AR-02 | Missions/Quests/Tasks persisted when active |
+| AR-03 | Skill Graph = progress source of truth |
+| AR-04 | Mastery/Confidence via Evidence only |
+| AR-05 | Reasoning Traces immutable at write |
+| AR-07 | Confidence inherits weakest-input floor |
+| AR-08 | Deterministic task recommendations (pre-Claude) |
+| AR-09 | Template Library for candidates |
+| AR-10 | Claude narrow in V1 |
+| AR-13 | Fail loud — no silent stale fallback |
+| AR-16 | RLS on all user-scoped tables |
+
+**When in doubt:** read the doc → build the smallest vertical slice → keep the app running → ask before architecting.
