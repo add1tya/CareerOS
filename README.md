@@ -28,3 +28,6 @@ Run the migrations in `supabase/migrations/` (in filename order) in the Supabase
 
 1. `20260716000001_create_profiles.sql` — profiles + onboarding
 2. `20260716000002_career_graph_init.sql` — goals, constraints, Career Graph initialization
+3. `20260716000003_skill_graph.sql` — skills, skill_dependencies, user_skill_mastery
+4. `20260716000004_seed_ontology.sql` — AI engineering ontology seed (~48 skills + dependencies)
+5. `20260716000005_skill_recommendations.sql` — Decision Engine v1 decision history (append-only)

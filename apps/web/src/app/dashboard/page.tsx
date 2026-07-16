@@ -4,14 +4,22 @@ export const dynamic = "force-dynamic";
 
 import { AppShell } from "@/components/app-shell";
 import { DashboardPlaceholder } from "@/components/dashboard-placeholder";
+import { DecisionInspector } from "@/components/decision-inspector";
+import { RecommendationCard } from "@/components/recommendation-card";
+import { SkillTreeInspector } from "@/components/skill-tree";
 import {
   getCareerGraph,
   initializeCareerGraph,
 } from "@/lib/career-graph-service";
+import { getOrCreateCurrentRecommendation } from "@/lib/decision-engine/decision-engine-service";
 import {
   getProfile,
   isOnboardingComplete,
 } from "@/lib/profile-service";
+import {
+  generateSkillGraph,
+  getSkillGraph,
+} from "@/lib/skill-graph/skill-graph-service";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -29,10 +37,16 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
-  // Backfill: initialize the Career Graph for users who onboarded before
-  // Sprint 3. Idempotent — a no-op once career_graph_initialized_at is set.
+  // Backfill for users who onboarded before these sprints. Both are idempotent —
+  // no-ops once their respective *_at flags are set.
   await initializeCareerGraph(supabase, user.id);
-  const careerGraph = await getCareerGraph(supabase, user.id);
+  await generateSkillGraph(supabase, user.id);
+
+  const [careerGraph, skillGraph, decision] = await Promise.all([
+    getCareerGraph(supabase, user.id),
+    getSkillGraph(supabase, user.id),
+    getOrCreateCurrentRecommendation(supabase, user.id),
+  ]);
 
   return (
     <AppShell userEmail={user.email}>
@@ -40,6 +54,11 @@ export default async function DashboardPage() {
         displayName={profile?.display_name}
         careerGraph={careerGraph}
       />
+      <div className="mt-6">
+        <RecommendationCard recommendation={decision.recommendation} />
+      </div>
+      <DecisionInspector ranking={decision.ranking} />
+      <SkillTreeInspector graph={skillGraph} />
     </AppShell>
   );
 }

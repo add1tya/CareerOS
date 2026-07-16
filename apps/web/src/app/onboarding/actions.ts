@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { initializeCareerGraph } from "@/lib/career-graph-service";
 import { onboardingInputSchema } from "@/lib/onboarding-schema";
 import { completeOnboarding } from "@/lib/profile-service";
+import { generateSkillGraph } from "@/lib/skill-graph/skill-graph-service";
 import { createClient } from "@/lib/supabase/server";
 
 export type OnboardingActionState = {
@@ -45,6 +46,7 @@ export async function submitOnboarding(
   try {
     await completeOnboarding(supabase, user.id, parsed.data);
     await initializeCareerGraph(supabase, user.id);
+    await generateSkillGraph(supabase, user.id);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not save onboarding.";

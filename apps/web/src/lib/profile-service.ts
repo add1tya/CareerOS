@@ -11,6 +11,7 @@ export type Profile = {
   available_hours_per_week: number;
   onboarding_completed_at: string | null;
   career_graph_initialized_at: string | null;
+  skill_graph_generated_at: string | null;
   created_with_version: string;
   created_at: string;
   updated_at: string;

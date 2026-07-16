@@ -318,6 +318,24 @@ Every mutation increments `version` (§2) and is expected to write an append-onl
 ## 10. Mapping to Implementation Surfaces
 
 ### 10.1 Supabase / Postgres
+
+> **Implemented mapping (M4, ADR-0001).** As of Sprint 4 the Skill Graph is
+> stored as a **global ontology + per-user overlay**, not a single per-user
+> `skill_nodes` table. The per-user `skill_nodes` description below is retained
+> as historical context; the tables actually implemented are:
+> - `skills` — GLOBAL, user-agnostic ontology rows (keyed by immutable
+>   `skill_key`; includes `domain`, `ontology_category`, `difficulty`,
+>   `estimated_hours_min/max`, `transferability`, `display_order`,
+>   `ontology_version`). Read-only reference data.
+> - `skill_dependencies` — GLOBAL edges referencing `parent_skill_key` /
+>   `child_skill_key` (no `user_id` scope; edges are ontology-level, shared).
+> - `user_skill_mastery` — PER-USER overlay keyed by (`user_id`, `skill_key`),
+>   holding `mastery`, `confidence`, `status`, `source`. RLS-scoped own-row.
+>
+> `skill_key` is an immutable identifier and must never change once introduced
+> (ADR-0001). Evidence, `skill_node_history`, weighted mastery updates, and
+> confidence decay remain deferred (unchanged intent, not yet implemented).
+
 - Skill Nodes map to a `skill_nodes` table, with `user_id` and `skill_key` jointly indexed (the common lookup pattern: "this user's instance of this ontology skill").
 - Dependency Edges map to a `skill_dependencies` table with `parent_skill_id`/`child_skill_id` foreign keys into `skill_nodes`; since edges are defined at the ontology level but instantiated per-user-graph, edges should reference nodes within the same `user_id` scope — never cross-user edges.
 - Evidence maps to a `skill_evidence` table, foreign-keyed to `skill_nodes`, append-only (no updates, only inserts — consistent with §9.6's audit requirement).
