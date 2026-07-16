@@ -24,4 +24,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Supabase: enable Email auth, set Site URL to `http://localhost:3000`, add redirect `http://localhost:3000/auth/callback`.
 
-Run the SQL in `supabase/migrations/20260716000001_create_profiles.sql` in the Supabase SQL Editor before testing onboarding.
+Run the migrations in `supabase/migrations/` (in filename order) in the Supabase SQL Editor before testing:
+
+1. `20260716000001_create_profiles.sql` — profiles + onboarding
+2. `20260716000002_career_graph_init.sql` — goals, constraints, Career Graph initialization

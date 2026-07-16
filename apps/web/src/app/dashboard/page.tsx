@@ -5,6 +5,10 @@ export const dynamic = "force-dynamic";
 import { AppShell } from "@/components/app-shell";
 import { DashboardPlaceholder } from "@/components/dashboard-placeholder";
 import {
+  getCareerGraph,
+  initializeCareerGraph,
+} from "@/lib/career-graph-service";
+import {
   getProfile,
   isOnboardingComplete,
 } from "@/lib/profile-service";
@@ -25,9 +29,17 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
+  // Backfill: initialize the Career Graph for users who onboarded before
+  // Sprint 3. Idempotent — a no-op once career_graph_initialized_at is set.
+  await initializeCareerGraph(supabase, user.id);
+  const careerGraph = await getCareerGraph(supabase, user.id);
+
   return (
     <AppShell userEmail={user.email}>
-      <DashboardPlaceholder displayName={profile?.display_name} />
+      <DashboardPlaceholder
+        displayName={profile?.display_name}
+        careerGraph={careerGraph}
+      />
     </AppShell>
   );
 }

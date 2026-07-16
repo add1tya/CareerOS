@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { initializeCareerGraph } from "@/lib/career-graph-service";
 import { onboardingInputSchema } from "@/lib/onboarding-schema";
 import { completeOnboarding } from "@/lib/profile-service";
 import { createClient } from "@/lib/supabase/server";
@@ -43,6 +44,7 @@ export async function submitOnboarding(
 
   try {
     await completeOnboarding(supabase, user.id, parsed.data);
+    await initializeCareerGraph(supabase, user.id);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not save onboarding.";
