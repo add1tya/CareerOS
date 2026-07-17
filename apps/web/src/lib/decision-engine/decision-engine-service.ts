@@ -46,7 +46,7 @@ export async function getOrCreateCurrentRecommendation(
 
   const { data: latest, error: latestError } = await supabase
     .from("skill_recommendations")
-    .select("recommended_skill_key, generated_at")
+    .select("id, recommended_skill_key, generated_at")
     .eq("user_id", userId)
     .order("generated_at", { ascending: false })
     .limit(1)
@@ -56,6 +56,7 @@ export async function getOrCreateCurrentRecommendation(
     throw new Error(`Failed to load recommendation history: ${latestError.message}`);
   }
 
+  let recommendationId = latest?.id ?? null;
   let generatedAt = latest?.generated_at ?? null;
 
   // Write-on-change: only append when the recommended skill differs.
@@ -70,16 +71,18 @@ export async function getOrCreateCurrentRecommendation(
         confidence: result.confidence,
         factors: serializeFactors(result),
       })
-      .select("generated_at")
+      .select("id, generated_at")
       .single();
 
     if (insertError) {
       throw new Error(`Failed to persist recommendation: ${insertError.message}`);
     }
+    recommendationId = inserted.id;
     generatedAt = inserted.generated_at;
   }
 
   const recommendation: SkillRecommendation = {
+    id: recommendationId!,
     recommendedSkillKey: result.winner.skillKey,
     skillName: result.winner.name,
     narrative,

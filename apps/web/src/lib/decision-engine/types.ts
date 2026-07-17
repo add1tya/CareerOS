@@ -42,6 +42,9 @@ export type RankingResult = {
 
 /** Assembled recommendation for display and persistence. */
 export type SkillRecommendation = {
+  /** Row id of the persisted recommendation — provenance anchor for the
+   *  Execution Engine (Recommendation -> Mission chain, ADR-0003). */
+  id: string;
   recommendedSkillKey: string;
   skillName: string;
   narrative: string;

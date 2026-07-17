@@ -31,3 +31,4 @@ Run the migrations in `supabase/migrations/` (in filename order) in the Supabase
 3. `20260716000003_skill_graph.sql` — skills, skill_dependencies, user_skill_mastery
 4. `20260716000004_seed_ontology.sql` — AI engineering ontology seed (~48 skills + dependencies)
 5. `20260716000005_skill_recommendations.sql` — Decision Engine v1 decision history (append-only)
+6. `20260716000006_execution_engine.sql` — Execution Engine v1 (missions, quests, tasks)
