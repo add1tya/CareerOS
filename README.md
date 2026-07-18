@@ -33,3 +33,4 @@ Run the migrations in `supabase/migrations/` (in filename order) in the Supabase
 5. `20260716000005_skill_recommendations.sql` — Decision Engine v1 decision history (append-only)
 6. `20260716000006_execution_engine.sql` — Execution Engine v1 (missions, quests, tasks)
 7. `20260716000007_evidence_and_mastery.sql` — Evidence & Mastery v1 (append-only evidence, overlay updates)
+8. `20260716000008_reflections.sql` — Reflection v1 (confirmation-gated self-assessment → evidence)

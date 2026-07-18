@@ -1,19 +1,16 @@
 /**
- * Evidence subsystem service (Sprint 7).
+ * Evidence subsystem service (Sprints 7–8).
  *
  * The ONLY writer of Evidence and of Evidence-derived Mastery/Confidence/status.
- * The Execution Engine merely signals that a Task was completed; all learning
- * logic lives here, keeping the two subsystems independent.
+ * Two entry points feed the SAME core:
+ *   - recordTaskCompletionEvidence  (Execution Engine signal, Tier 1 self-report)
+ *   - recordReflectionEvidence      (confirmed Reflection, Tier 2 artifact)
  *
- * Flow (deterministic, fail-loud):
- *   1. Guard idempotency (a Task produces at most one Evidence record).
- *   2. Append an immutable Evidence row (snapshotting the policy version).
- *   3. Fold it into the overlay cache via the pure mastery policy.
- *   4. Link the Task to the Evidence it produced.
- *
- * The overlay write is incremental, but it applies the same pure `applyEvidence`
- * fold as a full replay would (see mastery-policy.replaySkillOverlay), so the
- * cache stays equal to a from-scratch replay of the Evidence log (ADR-0004).
+ * Both call `appendEvidenceAndFold`, which appends an immutable Evidence row and
+ * folds it into the overlay cache via the pure mastery policy. The overlay write
+ * is incremental but applies the same `applyEvidence` fold as a full replay
+ * would (mastery-policy.replaySkillOverlay), so the cache stays equal to a
+ * from-scratch replay of the Evidence log (ADR-0004). Fail-loud, deterministic.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -22,7 +19,9 @@ import {
   EVIDENCE_TYPE_TIER,
   TASK_COMPLETION_EVIDENCE_SOURCE,
   TASK_COMPLETION_EVIDENCE_TYPE,
+  type EvidenceSource,
   type EvidenceTier,
+  type EvidenceType,
 } from "./evidence-types";
 import {
   MASTERY_POLICY_VERSION,
@@ -36,6 +35,13 @@ import {
 export type RecordTaskEvidenceInput = {
   taskId: string;
   skillKey: string;
+};
+
+/** What the Evidence subsystem needs from a confirmed Reflection update. */
+export type RecordReflectionEvidenceInput = {
+  reflectionId: string;
+  skillKey: string;
+  impliedMastery: number;
 };
 
 /**
@@ -64,39 +70,104 @@ export async function recordTaskCompletionEvidence(
 
   const skillKey = (taskRow.generated_from_skill_key as string) ?? input.skillKey;
 
-  const currentState = await loadCurrentState(supabase, userId, skillKey);
+  const evidenceId = await appendEvidenceAndFold(supabase, userId, {
+    skillKey,
+    type: TASK_COMPLETION_EVIDENCE_TYPE,
+    tier: EVIDENCE_TYPE_TIER[TASK_COMPLETION_EVIDENCE_TYPE],
+    impliedMastery: DEFAULT_SELF_REPORT_IMPLIED_MASTERY,
+    source: TASK_COMPLETION_EVIDENCE_SOURCE,
+    contentRef: input.taskId,
+    generatedFromTaskId: input.taskId,
+  });
+
+  // Duplicate insert (concurrent completion) => nothing to link.
+  if (!evidenceId) return;
+
+  // Link the Task to the Evidence it produced.
+  const { error: linkError } = await supabase
+    .from("tasks")
+    .update({ evidence_ref: evidenceId })
+    .eq("id", input.taskId)
+    .eq("user_id", userId);
+
+  if (linkError) {
+    throw new Error(`Failed to link task to evidence: ${linkError.message}`);
+  }
+}
+
+/**
+ * Records the Tier-2 Evidence produced by a CONFIRMED Reflection and updates the
+ * target skill's overlay. Idempotency is guaranteed by the reflection status
+ * guard (in the Reflection subsystem) plus the unique index on
+ * generated_from_reflection_id (handled here as a no-op).
+ */
+export async function recordReflectionEvidence(
+  supabase: SupabaseClient,
+  userId: string,
+  input: RecordReflectionEvidenceInput,
+): Promise<void> {
+  await appendEvidenceAndFold(supabase, userId, {
+    skillKey: input.skillKey,
+    type: "reflection",
+    tier: EVIDENCE_TYPE_TIER["reflection"],
+    impliedMastery: input.impliedMastery,
+    source: "user",
+    contentRef: input.reflectionId,
+    generatedFromReflectionId: input.reflectionId,
+  });
+}
+
+type EvidenceWrite = {
+  skillKey: string;
+  type: EvidenceType;
+  tier: EvidenceTier;
+  impliedMastery: number;
+  source: EvidenceSource;
+  contentRef: string | null;
+  generatedFromTaskId?: string | null;
+  generatedFromReflectionId?: string | null;
+};
+
+/**
+ * Shared core for every Evidence source: append one immutable Evidence row
+ * (snapshotting the policy version) and fold it into the overlay via the pure
+ * reducer. Returns the new Evidence id, or null if a unique-constraint conflict
+ * indicates the Evidence was already recorded (idempotent no-op).
+ */
+async function appendEvidenceAndFold(
+  supabase: SupabaseClient,
+  userId: string,
+  write: EvidenceWrite,
+): Promise<string | null> {
+  const currentState = await loadCurrentState(supabase, userId, write.skillKey);
   const unlocked = currentState.status !== "locked";
 
-  const tier = EVIDENCE_TYPE_TIER[TASK_COMPLETION_EVIDENCE_TYPE];
-  const evidence = {
-    tier,
-    impliedMastery: DEFAULT_SELF_REPORT_IMPLIED_MASTERY,
-  };
+  const nextState = applyEvidence(currentState.state, {
+    tier: write.tier,
+    impliedMastery: write.impliedMastery,
+  });
 
-  const nextState = applyEvidence(currentState.state, evidence);
-
-  // 2. Append immutable Evidence (policy version snapshotted per refinement 1).
   const { data: insertedEvidence, error: insertError } = await supabase
     .from("skill_evidence")
     .insert({
       user_id: userId,
-      skill_key: skillKey,
-      type: TASK_COMPLETION_EVIDENCE_TYPE,
-      tier,
-      implied_mastery: DEFAULT_SELF_REPORT_IMPLIED_MASTERY,
-      content_ref: input.taskId,
-      source: TASK_COMPLETION_EVIDENCE_SOURCE,
-      generated_from_task_id: input.taskId,
+      skill_key: write.skillKey,
+      type: write.type,
+      tier: write.tier,
+      implied_mastery: write.impliedMastery,
+      content_ref: write.contentRef,
+      source: write.source,
+      generated_from_task_id: write.generatedFromTaskId ?? null,
+      generated_from_reflection_id: write.generatedFromReflectionId ?? null,
       mastery_policy_version: MASTERY_POLICY_VERSION,
     })
     .select("id")
     .single();
 
   if (insertError) {
-    // Unique violation on generated_from_task_id => another request already
-    // recorded this Task's Evidence. Treat as an idempotent no-op.
+    // Unique violation => this Evidence was already recorded. Idempotent no-op.
     if (insertError.code === "23505") {
-      return;
+      return null;
     }
     throw new Error(`Failed to append evidence: ${insertError.message}`);
   }
@@ -105,7 +176,7 @@ export async function recordTaskCompletionEvidence(
 
   // Provenance: the strongest Evidence supporting this skill's confidence.
   const highestTierEvidenceId =
-    tier > currentState.state.highestTier
+    write.tier > currentState.state.highestTier
       ? evidenceId
       : currentState.highestTierEvidenceId;
 
@@ -117,13 +188,12 @@ export async function recordTaskCompletionEvidence(
     highestTier: nextState.highestTier,
   });
 
-  // 3. Fold into the overlay cache.
   const { error: overlayError } = await supabase
     .from("user_skill_mastery")
     .upsert(
       {
         user_id: userId,
-        skill_key: skillKey,
+        skill_key: write.skillKey,
         mastery: nextState.mastery,
         confidence: nextState.confidence,
         status,
@@ -140,16 +210,7 @@ export async function recordTaskCompletionEvidence(
     throw new Error(`Failed to update skill overlay: ${overlayError.message}`);
   }
 
-  // 4. Link the Task to the Evidence it produced.
-  const { error: linkError } = await supabase
-    .from("tasks")
-    .update({ evidence_ref: evidenceId })
-    .eq("id", input.taskId)
-    .eq("user_id", userId);
-
-  if (linkError) {
-    throw new Error(`Failed to link task to evidence: ${linkError.message}`);
-  }
+  return evidenceId;
 }
 
 type CurrentState = {
@@ -191,10 +252,7 @@ async function loadCurrentState(
 
   const highestTierEvidenceId =
     (row.highest_tier_evidence_id as string | null) ?? null;
-  const highestTier = await loadEvidenceTier(
-    supabase,
-    highestTierEvidenceId,
-  );
+  const highestTier = await loadEvidenceTier(supabase, highestTierEvidenceId);
 
   return {
     state: {
