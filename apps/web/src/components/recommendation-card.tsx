@@ -56,8 +56,9 @@ export function RecommendationCard({
       <CardContent className="space-y-2">
         <p className="text-sm text-foreground">{recommendation.narrative}</p>
         <p className="text-xs text-muted-foreground">
-          Determined from prerequisite structure and skill tier — not yet
-          personalized by evidence.
+          Determined from prerequisite structure and skill tier. It stays fixed
+          on the skill you are working as you record progress, and updates once a
+          skill is fully mastered — it is not yet weighted by mastery level.
         </p>
       </CardContent>
     </Card>

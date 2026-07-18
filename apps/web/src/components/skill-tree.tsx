@@ -78,7 +78,10 @@ export function SkillTreeInspector({ graph }: { graph: SkillGraph }) {
                 {skill.status} · {skill.source === "domain_advantage" ? "DA" : "—"}
               </div>
               <div style={{ fontSize: 10, opacity: 0.85 }}>
-                M {skill.mastery.toFixed(2)} · C {skill.confidence.toFixed(2)}
+                Mastery {skill.mastery.toFixed(2)}
+              </div>
+              <div style={{ fontSize: 10, opacity: 0.85 }}>
+                Confidence {skill.confidence.toFixed(2)}
               </div>
             </div>
           ),
@@ -119,8 +122,15 @@ export function SkillTreeInspector({ graph }: { graph: SkillGraph }) {
         <p className="text-sm text-muted-foreground">
           Internal debugging view of the generated Skill Graph — {graph.nodes.length}{" "}
           skills, {graph.edges.length} dependencies. Solid border = available,
-          dashed = locked. M = mastery, C = confidence, DA = domain-advantage
-          provenance. Not a finished feature.
+          dashed = locked. DA = domain-advantage provenance. Not a finished
+          feature.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Mastery and Confidence are distinct dimensions (Principle 19): Mastery
+          is the estimated capability, Confidence is how verified that estimate
+          is. Completing tasks records self-reported Evidence, so Confidence is
+          capped at ~0.30 even as Mastery climbs — higher confidence needs
+          higher-tier Evidence (deferred).
         </p>
       </div>
       <div

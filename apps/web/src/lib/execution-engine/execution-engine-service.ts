@@ -150,16 +150,28 @@ async function assemblePlan(
 }
 
 /**
- * Completes a Task and applies the deterministic downstream consequences:
- * when every Task in the active Quest is done, complete the Quest and lazily
- * generate the next one (or complete the Mission if none remains). The user's
- * only action is completing a task; Quest/Mission transitions are automatic.
+ * Signal emitted when a Task transitions to completed. This is the ONLY thing
+ * the Execution Engine exposes about completion; all learning logic (Evidence,
+ * Mastery, Confidence, status) lives in the Evidence subsystem, which consumes
+ * this signal. The Execution Engine has no dependency on that subsystem.
+ */
+export type TaskCompletionSignal = {
+  taskId: string;
+  skillKey: string;
+};
+
+/**
+ * Completes a Task and applies the deterministic EXECUTION consequences: when
+ * every Task in the active Quest is done, complete the Quest and lazily generate
+ * the next one (or complete the Mission if none remains). Returns a completion
+ * signal for the caller to forward to the Evidence subsystem, or null if no Task
+ * was completed. No Evidence/Mastery logic happens here.
  */
 export async function completeTaskAndAdvance(
   supabase: SupabaseClient,
   userId: string,
   taskId: string,
-): Promise<void> {
+): Promise<TaskCompletionSignal | null> {
   const { data: taskRow, error: taskError } = await supabase
     .from("tasks")
     .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -172,11 +184,18 @@ export async function completeTaskAndAdvance(
     throw new Error(`Failed to complete task: ${taskError.message}`);
   }
   if (!taskRow) {
-    // Not found / not owned — nothing to advance.
-    return;
+    // Not found / not owned — nothing to complete.
+    return null;
   }
 
-  const questId = toTask(taskRow).questId;
+  const completedTask = toTask(taskRow);
+  // The Task is completed; the signal is returned regardless of whether the
+  // Quest/Mission also advances below.
+  const signal: TaskCompletionSignal = {
+    taskId: completedTask.id,
+    skillKey: completedTask.generatedFromSkillKey,
+  };
+  const questId = completedTask.questId;
 
   const { data: questRow, error: questError } = await supabase
     .from("quests")
@@ -192,13 +211,13 @@ export async function completeTaskAndAdvance(
   const quest = toQuest(questRow);
   // Guard against double-submit: only an active quest can advance.
   if (quest.status !== "active") {
-    return;
+    return signal;
   }
 
   const tasks = await loadTasks(supabase, questId);
   const allDone = tasks.every((task) => task.status === "completed");
   if (!allDone) {
-    return;
+    return signal;
   }
 
   // Complete the quest (conditional on still-active to stay idempotent).
@@ -216,10 +235,11 @@ export async function completeTaskAndAdvance(
   }
   // Another concurrent request already advanced this quest.
   if (!completedQuest) {
-    return;
+    return signal;
   }
 
   await advanceMission(supabase, userId, quest.missionId);
+  return signal;
 }
 
 /**

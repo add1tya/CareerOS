@@ -6,7 +6,7 @@
  * confidence -> build a human-readable reason. No I/O, no clock, no randomness,
  * no weighted sums or invented coefficients.
  */
-import type { SkillGraph, SkillGraphNode } from "@/lib/skill-graph/types";
+import type { SkillGraph, SkillGraphNode, SkillStatus } from "@/lib/skill-graph/types";
 import {
   RANKING_FACTORS,
   buildRankingContext,
@@ -18,9 +18,25 @@ import type {
   RecommendationConfidence,
 } from "@/lib/decision-engine/types";
 
-/** Candidate Generator: available skills only (all hard prerequisites met). */
+/**
+ * Statuses eligible to be recommended: unlocked and not yet mastered. Including
+ * in-progress skills (not just `available`) is required once Evidence can move a
+ * skill out of `available`: it keeps the recommendation stable on the skill the
+ * user is actively working, rather than flipping away the moment they start
+ * (Recommendation Stability, task-generation-engine.md §9). A skill leaves the
+ * pool only when it becomes `mastered` (or dormant/deprecated), at which point
+ * the next-best skill is recommended.
+ */
+const ACTIVE_CANDIDATE_STATUSES: ReadonlySet<SkillStatus> = new Set([
+  "available",
+  "learning",
+  "practicing",
+  "verified",
+]);
+
+/** Candidate Generator: unlocked, not-yet-mastered skills. */
 export function generateCandidates(graph: SkillGraph): SkillGraphNode[] {
-  return graph.nodes.filter((node) => node.status === "available");
+  return graph.nodes.filter((node) => ACTIVE_CANDIDATE_STATUSES.has(node.status));
 }
 
 /** Lexicographic comparison across the ordered factors (lower = better). */
