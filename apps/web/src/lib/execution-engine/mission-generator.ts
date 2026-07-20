@@ -11,6 +11,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { appendHistoryEvent } from "@/lib/history/history-service";
+
 import { toMission } from "./mappers";
 import type { SkillExecutionTemplate } from "./templates";
 import type { MissionInstance } from "./types";
@@ -22,9 +24,11 @@ export async function generateMission(
     template: SkillExecutionTemplate;
     recommendationId: string | null;
     goalId: string | null;
+    /** Shared with related events from the same action (e.g. first quest). */
+    correlationId: string;
   },
 ): Promise<MissionInstance> {
-  const { userId, template, recommendationId, goalId } = params;
+  const { userId, template, recommendationId, goalId, correlationId } = params;
 
   const { data, error } = await supabase
     .from("missions")
@@ -46,6 +50,15 @@ export async function generateMission(
   if (error) {
     throw new Error(`Failed to generate mission: ${error.message}`);
   }
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "mission_created",
+    entityKind: "mission",
+    entityId: data.id as string,
+    correlationId,
+    actor: "execution_engine",
+    payload: { skill_key: template.skillKey },
+  });
 
   return toMission(data);
 }

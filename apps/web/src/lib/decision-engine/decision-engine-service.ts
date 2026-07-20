@@ -15,6 +15,10 @@ import type {
   DecisionEngineOutput,
   SkillRecommendation,
 } from "@/lib/decision-engine/types";
+import {
+  appendHistoryEvent,
+  newCorrelationId,
+} from "@/lib/history/history-service";
 import { getSkillGraph } from "@/lib/skill-graph/skill-graph-service";
 
 /**
@@ -79,6 +83,15 @@ export async function getOrCreateCurrentRecommendation(
     }
     recommendationId = inserted.id;
     generatedAt = inserted.generated_at;
+
+    await appendHistoryEvent(supabase, userId, {
+      eventType: "recommendation_recorded",
+      entityKind: "skill_recommendation",
+      entityId: inserted.id as string,
+      correlationId: newCorrelationId(),
+      actor: "decision_engine",
+      payload: { skill_key: result.winner.skillKey },
+    });
   }
 
   const recommendation: SkillRecommendation = {

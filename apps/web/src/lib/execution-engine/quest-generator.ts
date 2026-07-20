@@ -8,6 +8,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { appendHistoryEvent } from "@/lib/history/history-service";
+
 import { toQuest } from "./mappers";
 import { generateTasks } from "./task-generator";
 import type { QuestTemplate } from "./templates";
@@ -21,9 +23,12 @@ export async function generateQuest(
     skillKey: string;
     quest: QuestTemplate;
     orderIndex: number;
+    /** Shared with related events from the same action (e.g. mission_created). */
+    correlationId: string;
   },
 ): Promise<QuestInstance> {
-  const { userId, missionId, skillKey, quest, orderIndex } = params;
+  const { userId, missionId, skillKey, quest, orderIndex, correlationId } =
+    params;
 
   const { data, error } = await supabase
     .from("quests")
@@ -43,6 +48,15 @@ export async function generateQuest(
   }
 
   const questInstance = toQuest(data);
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "quest_created",
+    entityKind: "quest",
+    entityId: questInstance.id,
+    correlationId,
+    actor: "execution_engine",
+    payload: { skill_key: skillKey, order_index: orderIndex },
+  });
 
   await generateTasks(supabase, {
     userId,

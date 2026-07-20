@@ -15,6 +15,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  appendHistoryEvent,
+  newCorrelationId,
+} from "@/lib/history/history-service";
 import { recordReflectionEvidence } from "@/lib/skill-graph/evidence/evidence-service";
 import { MASTERY_POLICY_VERSION } from "@/lib/skill-graph/evidence/mastery-policy";
 
@@ -84,7 +88,21 @@ export async function createReflection(
     throw new Error(`Failed to create reflection: ${error.message}`);
   }
 
-  return data.id as string;
+  const reflectionId = data.id as string;
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "reflection_created",
+    entityKind: "reflection",
+    entityId: reflectionId,
+    correlationId: newCorrelationId(),
+    actor: "user",
+    payload: {
+      skill_key: payload.skill_key,
+      self_assessment: payload.self_assessment,
+    },
+  });
+
+  return reflectionId;
 }
 
 /**
@@ -114,6 +132,9 @@ export async function confirmReflection(
     return;
   }
 
+  // One correlation for evidence_recorded + reflection_confirmed.
+  const correlationId = newCorrelationId();
+
   const updates = (row.derived_updates as DerivedUpdate[]) ?? [];
   for (const update of updates) {
     if (update.kind !== "reflection_evidence") continue;
@@ -121,6 +142,7 @@ export async function confirmReflection(
       reflectionId,
       skillKey: update.skillKey,
       impliedMastery: update.impliedMastery,
+      correlationId,
     });
   }
 
@@ -134,6 +156,14 @@ export async function confirmReflection(
   if (statusError) {
     throw new Error(`Failed to confirm reflection: ${statusError.message}`);
   }
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "reflection_confirmed",
+    entityKind: "reflection",
+    entityId: reflectionId,
+    correlationId,
+    actor: "user",
+  });
 }
 
 /** Declines a proposed reflection. The record is preserved as signal. */
@@ -142,16 +172,28 @@ export async function declineReflection(
   userId: string,
   reflectionId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("reflections")
     .update({ status: "declined" })
     .eq("id", reflectionId)
     .eq("user_id", userId)
-    .eq("status", "proposed");
+    .eq("status", "proposed")
+    .select("id, skill_key")
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Failed to decline reflection: ${error.message}`);
   }
+  if (!data) return;
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "reflection_declined",
+    entityKind: "reflection",
+    entityId: reflectionId,
+    correlationId: newCorrelationId(),
+    actor: "user",
+    payload: { skill_key: (data.skill_key as string) ?? null },
+  });
 }
 
 /** Lists the user's most recent reflections (newest first). */

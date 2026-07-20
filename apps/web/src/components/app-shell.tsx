@@ -30,6 +30,18 @@ export function AppShell({ children, userEmail }: AppShellProps) {
                   Dashboard
                 </Link>
                 <Link
+                  href="/roadmap"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Roadmap
+                </Link>
+                <Link
+                  href="/history"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  History
+                </Link>
+                <Link
                   href="/reflect"
                   className="text-muted-foreground hover:text-foreground"
                 >

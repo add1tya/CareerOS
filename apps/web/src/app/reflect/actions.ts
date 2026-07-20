@@ -59,6 +59,7 @@ export async function createReflectionAction(
   }
 
   revalidatePath("/reflect");
+  revalidatePath("/history");
   return {};
 }
 
@@ -81,6 +82,8 @@ export async function confirmReflectionAction(formData: FormData): Promise<void>
 
   revalidatePath("/reflect");
   revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath("/roadmap");
 }
 
 /** Declines a proposed reflection. The record is preserved as signal. */
@@ -101,4 +104,5 @@ export async function declineReflectionAction(formData: FormData): Promise<void>
   await declineReflection(supabase, user.id, parsed.data.reflection_id);
 
   revalidatePath("/reflect");
+  revalidatePath("/history");
 }

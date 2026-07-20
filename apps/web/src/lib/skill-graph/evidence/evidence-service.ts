@@ -15,6 +15,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  appendHistoryEvent,
+  newCorrelationId,
+} from "@/lib/history/history-service";
+
+import {
   DEFAULT_SELF_REPORT_IMPLIED_MASTERY,
   EVIDENCE_TYPE_TIER,
   TASK_COMPLETION_EVIDENCE_SOURCE,
@@ -35,6 +40,8 @@ import {
 export type RecordTaskEvidenceInput = {
   taskId: string;
   skillKey: string;
+  /** Shared with task_completed (and related) History events. */
+  correlationId?: string;
 };
 
 /** What the Evidence subsystem needs from a confirmed Reflection update. */
@@ -42,6 +49,8 @@ export type RecordReflectionEvidenceInput = {
   reflectionId: string;
   skillKey: string;
   impliedMastery: number;
+  /** Shared with reflection_confirmed History event. */
+  correlationId?: string;
 };
 
 /**
@@ -78,6 +87,7 @@ export async function recordTaskCompletionEvidence(
     source: TASK_COMPLETION_EVIDENCE_SOURCE,
     contentRef: input.taskId,
     generatedFromTaskId: input.taskId,
+    correlationId: input.correlationId ?? newCorrelationId(),
   });
 
   // Duplicate insert (concurrent completion) => nothing to link.
@@ -114,6 +124,7 @@ export async function recordReflectionEvidence(
     source: "user",
     contentRef: input.reflectionId,
     generatedFromReflectionId: input.reflectionId,
+    correlationId: input.correlationId ?? newCorrelationId(),
   });
 }
 
@@ -126,6 +137,7 @@ type EvidenceWrite = {
   contentRef: string | null;
   generatedFromTaskId?: string | null;
   generatedFromReflectionId?: string | null;
+  correlationId: string;
 };
 
 /**
@@ -173,6 +185,19 @@ async function appendEvidenceAndFold(
   }
 
   const evidenceId = insertedEvidence.id as string;
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "evidence_recorded",
+    entityKind: "skill_evidence",
+    entityId: evidenceId,
+    correlationId: write.correlationId,
+    actor: "evidence_engine",
+    payload: {
+      skill_key: write.skillKey,
+      evidence_type: write.type,
+      tier: write.tier,
+    },
+  });
 
   // Provenance: the strongest Evidence supporting this skill's confidence.
   const highestTierEvidenceId =

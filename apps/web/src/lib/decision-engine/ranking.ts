@@ -39,8 +39,15 @@ export function generateCandidates(graph: SkillGraph): SkillGraphNode[] {
   return graph.nodes.filter((node) => ACTIVE_CANDIDATE_STATUSES.has(node.status));
 }
 
-/** Lexicographic comparison across the ordered factors (lower = better). */
-function compareByFactors(
+/**
+ * Lexicographic comparison across the ordered factors (lower = better).
+ *
+ * Exported so the Planning Engine (Sprint 9) sequences the Roadmap with the
+ * EXACT same comparator the Decision Engine uses to pick the single winner —
+ * one ordering source of truth, guaranteeing the first upcoming Roadmap step
+ * equals the current Recommendation (see planning/roadmap-computer.ts).
+ */
+export function compareByFactors(
   a: SkillGraphNode,
   b: SkillGraphNode,
   ctx: RankingContext,

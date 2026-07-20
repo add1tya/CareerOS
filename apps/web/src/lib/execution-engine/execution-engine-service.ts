@@ -19,6 +19,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { SkillRecommendation } from "@/lib/decision-engine/types";
+import {
+  appendHistoryEvent,
+  newCorrelationId,
+} from "@/lib/history/history-service";
 
 import { toMission, toQuest, toTask } from "./mappers";
 import { generateMission } from "./mission-generator";
@@ -92,11 +96,15 @@ async function ensureMission(
     return toMission(existing);
   }
 
+  // One correlation id for mission_created + quest_created from this action.
+  const correlationId = newCorrelationId();
+
   const mission = await generateMission(supabase, {
     userId,
     template,
     recommendationId: recommendation.id,
     goalId: recommendation.goalId,
+    correlationId,
   });
 
   // Lazy generation: only the first quest (+ its tasks) up front.
@@ -106,6 +114,7 @@ async function ensureMission(
     skillKey: template.skillKey,
     quest: template.quests[0],
     orderIndex: 0,
+    correlationId,
   });
 
   return mission;
@@ -158,6 +167,8 @@ async function assemblePlan(
 export type TaskCompletionSignal = {
   taskId: string;
   skillKey: string;
+  /** Shared with Evidence History events from the same user action. */
+  correlationId: string;
 };
 
 /**
@@ -166,11 +177,16 @@ export type TaskCompletionSignal = {
  * the next one (or complete the Mission if none remains). Returns a completion
  * signal for the caller to forward to the Evidence subsystem, or null if no Task
  * was completed. No Evidence/Mastery logic happens here.
+ *
+ * @param correlationId - optional; when provided (typical from the dashboard
+ *   action), groups task/quest/mission History events with the subsequent
+ *   evidence_recorded event. Generated internally if omitted.
  */
 export async function completeTaskAndAdvance(
   supabase: SupabaseClient,
   userId: string,
   taskId: string,
+  correlationId: string = newCorrelationId(),
 ): Promise<TaskCompletionSignal | null> {
   const { data: taskRow, error: taskError } = await supabase
     .from("tasks")
@@ -194,7 +210,18 @@ export async function completeTaskAndAdvance(
   const signal: TaskCompletionSignal = {
     taskId: completedTask.id,
     skillKey: completedTask.generatedFromSkillKey,
+    correlationId,
   };
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "task_completed",
+    entityKind: "task",
+    entityId: completedTask.id,
+    correlationId,
+    actor: "user",
+    payload: { skill_key: completedTask.generatedFromSkillKey },
+  });
+
   const questId = completedTask.questId;
 
   const { data: questRow, error: questError } = await supabase
@@ -238,7 +265,16 @@ export async function completeTaskAndAdvance(
     return signal;
   }
 
-  await advanceMission(supabase, userId, quest.missionId);
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "quest_completed",
+    entityKind: "quest",
+    entityId: questId,
+    correlationId,
+    actor: "execution_engine",
+    payload: { skill_key: completedTask.generatedFromSkillKey },
+  });
+
+  await advanceMission(supabase, userId, quest.missionId, correlationId);
   return signal;
 }
 
@@ -251,6 +287,7 @@ async function advanceMission(
   supabase: SupabaseClient,
   userId: string,
   missionId: string,
+  correlationId: string,
 ): Promise<void> {
   const { data: missionRow, error: missionError } = await supabase
     .from("missions")
@@ -282,28 +319,44 @@ async function advanceMission(
       skillKey: mission.generatedFromSkillKey,
       quest: template.quests[nextIndex],
       orderIndex: nextIndex,
+      correlationId,
     });
     return;
   }
 
-  await completeMission(supabase, userId, missionId);
+  await completeMission(supabase, userId, missionId, correlationId);
 }
 
 async function completeMission(
   supabase: SupabaseClient,
   userId: string,
   missionId: string,
+  correlationId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("missions")
     .update({ status: "completed" })
     .eq("id", missionId)
     .eq("user_id", userId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .select("id, generated_from_skill_key")
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Failed to complete mission: ${error.message}`);
   }
+  if (!data) return;
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "mission_completed",
+    entityKind: "mission",
+    entityId: missionId,
+    correlationId,
+    actor: "execution_engine",
+    payload: {
+      skill_key: (data.generated_from_skill_key as string) ?? null,
+    },
+  });
 }
 
 async function loadQuests(
