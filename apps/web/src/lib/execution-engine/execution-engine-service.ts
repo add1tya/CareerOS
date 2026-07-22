@@ -242,8 +242,8 @@ export async function completeTaskAndAdvance(
   }
 
   const tasks = await loadTasks(supabase, questId);
-  const allDone = tasks.every((task) => task.status === "completed");
-  if (!allDone) {
+  const allResolved = tasks.every(isTaskResolved);
+  if (!allResolved) {
     return signal;
   }
 
@@ -276,6 +276,108 @@ export async function completeTaskAndAdvance(
 
   await advanceMission(supabase, userId, quest.missionId, correlationId);
   return signal;
+}
+
+export type TaskSkipSignal = {
+  taskId: string;
+  skillKey: string;
+  correlationId: string;
+};
+
+/**
+ * Skips a Task (no Evidence). When every Task in the active Quest is completed
+ * or skipped, advances Quest/Mission the same way completion does. Missions are
+ * never rewritten by recommendation overrides — only task/quest status here.
+ */
+export async function skipTaskAndAdvance(
+  supabase: SupabaseClient,
+  userId: string,
+  taskId: string,
+  correlationId: string = newCorrelationId(),
+): Promise<TaskSkipSignal | null> {
+  const { data: taskRow, error: taskError } = await supabase
+    .from("tasks")
+    .update({ status: "skipped", completed_at: null })
+    .eq("id", taskId)
+    .eq("user_id", userId)
+    .in("status", ["pending", "active"])
+    .select("*")
+    .maybeSingle();
+
+  if (taskError) {
+    throw new Error(`Failed to skip task: ${taskError.message}`);
+  }
+  if (!taskRow) {
+    return null;
+  }
+
+  const skippedTask = toTask(taskRow);
+  const signal: TaskSkipSignal = {
+    taskId: skippedTask.id,
+    skillKey: skippedTask.generatedFromSkillKey,
+    correlationId,
+  };
+
+  // History for the skip itself is recorded by the Override subsystem
+  // (task_skipped on the override entity). Quest/mission advancement events
+  // still come from Execution when the quest resolves.
+
+  const questId = skippedTask.questId;
+
+  const { data: questRow, error: questError } = await supabase
+    .from("quests")
+    .select("*")
+    .eq("id", questId)
+    .eq("user_id", userId)
+    .single();
+
+  if (questError) {
+    throw new Error(`Failed to load quest: ${questError.message}`);
+  }
+
+  const quest = toQuest(questRow);
+  if (quest.status !== "active") {
+    return signal;
+  }
+
+  const tasks = await loadTasks(supabase, questId);
+  const allResolved = tasks.every(isTaskResolved);
+  if (!allResolved) {
+    return signal;
+  }
+
+  const { data: completedQuest, error: completeError } = await supabase
+    .from("quests")
+    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("id", questId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .select("id")
+    .maybeSingle();
+
+  if (completeError) {
+    throw new Error(`Failed to complete quest after skip: ${completeError.message}`);
+  }
+  if (!completedQuest) {
+    return signal;
+  }
+
+  await appendHistoryEvent(supabase, userId, {
+    eventType: "quest_completed",
+    entityKind: "quest",
+    entityId: questId,
+    correlationId,
+    actor: "execution_engine",
+    payload: { skill_key: skippedTask.generatedFromSkillKey },
+  });
+
+  await advanceMission(supabase, userId, quest.missionId, correlationId);
+  return signal;
+}
+
+/** Completed or skipped counts as resolved for quest advancement. */
+function isTaskResolved(task: TaskInstance): boolean {
+  return task.status === "completed" || task.status === "skipped";
 }
 
 /**

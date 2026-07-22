@@ -39,7 +39,13 @@ export function AppShell({ children, userEmail }: AppShellProps) {
                   href="/history"
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  History
+                  Timeline
+                </Link>
+                <Link
+                  href="/export"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Export
                 </Link>
                 <Link
                   href="/reflect"

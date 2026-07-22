@@ -31,6 +31,9 @@ export const HISTORY_EVENT_TYPES = [
   "reflection_created",
   "reflection_confirmed",
   "reflection_declined",
+  "recommendation_overridden",
+  "task_skipped",
+  "constraint_updated",
 ] as const;
 
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
@@ -42,6 +45,8 @@ export const HISTORY_ENTITY_KINDS = [
   "task",
   "skill_evidence",
   "reflection",
+  "override",
+  "constraint",
 ] as const;
 
 export type HistoryEntityKind = (typeof HISTORY_ENTITY_KINDS)[number];

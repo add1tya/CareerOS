@@ -13,14 +13,18 @@ export const SESSION_TASK_CAP = 5;
 
 /**
  * Returns the tasks to work on now: the active quest's tasks in order, with any
- * still-pending/active tasks ahead of completed ones, capped at SESSION_TASK_CAP.
- * Completed tasks are retained (within the cap) so progress stays visible.
+ * still-pending/active tasks ahead of resolved ones, capped at SESSION_TASK_CAP.
+ * Completed/skipped tasks are retained (within the cap) so progress stays visible.
  */
 export function planSession(tasks: TaskInstance[]): TaskInstance[] {
   const byOrder = [...tasks].sort((a, b) => a.orderIndex - b.orderIndex);
 
-  const incomplete = byOrder.filter((task) => task.status !== "completed");
-  const completed = byOrder.filter((task) => task.status === "completed");
+  const incomplete = byOrder.filter(
+    (task) => task.status !== "completed" && task.status !== "skipped",
+  );
+  const resolved = byOrder.filter(
+    (task) => task.status === "completed" || task.status === "skipped",
+  );
 
-  return [...incomplete, ...completed].slice(0, SESSION_TASK_CAP);
+  return [...incomplete, ...resolved].slice(0, SESSION_TASK_CAP);
 }

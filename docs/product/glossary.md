@@ -10,6 +10,9 @@ The complete structured model of the user's professional state: their Skill Grap
 ### Skill Graph
 A directed graph of individual Skills, connected by Dependency edges, each carrying a current Mastery level for the user. This is the primary data structure in CareerOS and the single source of truth for progress (see Guiding Principle 9).
 
+### Skill Relationship Explorer
+A structured, founder-facing projection of one skill’s direct (1-hop) prerequisites and unlocks from the Skill Graph, with optional Roadmap participation context. Read-only — does not infer edges or change planning (ADR-0018). Distinct from Skill Tree (full-graph visualization).
+
 ### Skill (Node)
 A single, atomically-defined unit of capability (e.g., "Vector embeddings," "Supabase row-level security," "PyTorch autograd"). Every Skill has a name, a description, zero or more Dependencies, and a current Mastery level for the user. Skills are the vertices of the Skill Graph.
 
@@ -22,8 +25,26 @@ A directed edge between two Skills indicating that meaningful progress on the ta
 ### Mastery
 A user-specific, per-Skill measure of demonstrated competence, expressed on a defined scale (not binary complete/incomplete). Mastery is derived from completed Tasks and, where applicable, direct user or AI Mentor assessment. Mastery decays in confidence over time per Guiding Principle 30, and is never treated as a permanent, one-time-set value.
 
+### Confidence
+A user-specific, per-Skill measure of how verified the current Mastery estimate is. Independent of Mastery (Principle 19): higher claimed Mastery does not imply higher Confidence. Confidence is floored by Evidence tier ceilings (non-additive).
+
+### Evidence
+An append-only record that supports a change to Mastery and/or Confidence for a Skill. Mastery and Confidence change only via Evidence (AR-04). Types include self-report, reflection, and self-report override, among others documented in the Skill Graph schema.
+
+### Mastery Self-Report Override
+An explicit user disagreement with a system-computed Mastery estimate for a Skill, recorded as Evidence of type `self_report_override` (skill-graph-schema.md §5.5). It is weighted like other Tier-1 Self Report Evidence — not an authoritative overwrite of the overlay. Distinct from a Recommendation Override (eligibility signal in the `overrides` table).
+
+### Recommendation Override
+A user disagreement with a recommended Skill or Task (“not this skill” / skip), persisted in the `overrides` table as signal for derived eligibility suppression. Does not write Evidence or change Mastery (ADR-0009).
+
 ### Progress Score
-An aggregate, computed metric summarizing overall advancement toward a stated Goal, derived from Mastery levels across all relevant Skill Graph Nodes weighted by their relevance to that Goal. Distinct from Mastery, which is per-Skill; Progress Score is per-Goal.
+An aggregate, computed metric summarizing overall advancement toward a stated Goal, derived from Mastery levels across all relevant Skill Graph Nodes weighted by their relevance to that Goal. Distinct from Mastery, which is per-Skill; Progress Score is per-Goal. **Not implemented in V1** — requires `skill_goal_relevance` (deferred; ADR-0016).
+
+### Goal Progress Explanation
+A structured, founder-facing projection of progress toward the active Goal using **roadmap stage** and unranked completed / current / remaining skills on the computed Roadmap. Pure read model — does not compute Progress Score, rank contributions, or forecast completion (ADR-0016). Distinct from Roadmap Explanation (path ordering).
+
+### Goal Explorer
+A structured, founder-facing, read-only dossier of the active Goal: identity/provenance, recorded constraints, and optional **Current Roadmap** path skill lists. Path skills are planning associations, not goal requirements (ADR-0019). Distinct from Goal Progress Explanation (stage narrative).
 
 ### Goal
 A user-defined desired future state (e.g., "Become employable as an AI Engineer within 12 months"), captured during Onboarding and revisable at any time. Every recommendation in the system must be traceable to at least one active Goal.
@@ -31,8 +52,14 @@ A user-defined desired future state (e.g., "Become employable as an AI Engineer 
 ### Constraint
 A user-defined limitation on how a Goal can be pursued — most commonly available weekly hours, but also including things like current employment obligations or hard deadlines. Constraints directly bound what the Decision Engine is allowed to recommend.
 
+### Opportunity Assessment
+A rare, deterministic projection that detects when a Constraint change unlocks materially more capacity against Planning’s remaining work (`constraint_change_unlock` in V1). Surfaces what changed, why it matters, and what is now possible — UI-only; does not alter ranking or Roadmap generation (ADR-0013). Distinct from Opportunity Adjustment (deferred pipeline stage).
+
 ### Roadmap
-The current, computed sequence of Missions and Quests projected to move the user from their present Skill Graph state toward a stated Goal, given current Constraints. The Roadmap is always a live, recomputed view (per Guiding Principle 8), never a stored, static document.
+The current, computed sequence of Missions and Quests projected to move the user from their present Skill Graph state toward a stated Goal, given current Constraints. The Roadmap is always a live, recomputed view (per Guiding Principle 8), never a stored, static document. V1 is skill-granular (ADR-0006).
+
+### Roadmap Explanation
+A structured, founder-facing projection of a computed Roadmap into declarative path-level answers (structure, current step, current vs next, blockedBy constraints, effort-as-presentation, goal title). Pure read model — does not reorder or regenerate the Roadmap (ADR-0015). Distinct from per-step `whyHere` captions and from Decision Explanation (which uses a persisted recommendation snapshot).
 
 ### Decision Engine
 The subsystem (backed by the Claude API) responsible for evaluating the current Skill Graph, Goals, and Constraints, and producing ranked, explainable recommendations for what the user should do next. Also referred to as the Career Intelligence Engine in earlier planning documents — the two terms are treated as synonyms, with "Decision Engine" preferred going forward for consistency.
@@ -59,7 +86,16 @@ The conversational interface (Mentor Chat) through which the user interacts with
 The specific product surface (UI feature) implementing the AI Mentor. "AI Mentor" refers to the reasoning persona/capability; "Mentor Chat" refers to the screen/interface.
 
 ### Reasoning Trace
-The stored, human-readable explanation attached to any Decision Engine output (a recommended Task, a re-prioritized Skill, a Roadmap change), describing which Goal, Constraint, and Skill Graph state produced that output. Required per Guiding Principle 11; never regenerated inconsistently on demand.
+The stored, human-readable explanation attached to any Decision Engine output (a recommended Task, a re-prioritized Skill, a Roadmap change), describing which Goal, Constraint, and Skill Graph state produced that output. Required per Guiding Principle 11; never regenerated inconsistently on demand. In V1 skill recommendations, the immutable `skill_recommendations` row (narrative + factor snapshot) is the trace substrate; a separate `reasoning_traces` table remains deferred (ADR-0014).
+
+### Decision Explanation
+A structured, founder-facing projection of a persisted decision factor snapshot into declarative answers (why this skill, why now, why not the runner-up, if skipped, goal alignment). Pure read model — does not change ranking (ADR-0014). Distinct from DecisionInspector (engineering factor table) and from Claude-generated prose.
+
+### History Event Log
+The Career Graph’s append-only cross-component audit index (`history_events`). Records that domain mutations occurred (references + light payload); does not duplicate domain content and is not an event-sourced rebuild of state (ADR-0007).
+
+### Timeline View
+A structured, founder-facing projection of the History Event Log into correlation-grouped journey entries. Presentation-only grouping; preserves each event’s id, timestamp, and type. Not analytics and not event sourcing (ADR-0017). Surfaced by elevating `/history`.
 
 ### Onboarding Interview
 The structured, conversational intake flow (a V1 core feature) through which a new user's starting Skill Graph, Goals, and Constraints are established. Produces the user's initial Career Graph state.

@@ -35,3 +35,4 @@ Run the migrations in `supabase/migrations/` (in filename order) in the Supabase
 7. `20260716000007_evidence_and_mastery.sql` — Evidence & Mastery v1 (append-only evidence, overlay updates)
 8. `20260716000008_reflections.sql` — Reflection v1 (confirmation-gated self-assessment → evidence)
 9. `20260716000009_history_events.sql` — History Event Log v1 (append-only Career Graph audit timeline)
+10. `20260716000010_overrides.sql` — Overrides as Signal v1 (append-only intent; suppression derived)

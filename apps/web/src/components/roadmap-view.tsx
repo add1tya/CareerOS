@@ -4,10 +4,15 @@
  * Renders the computed Roadmap: completed skills (context), the current skill
  * (equals the Decision Engine recommendation), and upcoming skills in projected
  * order. Effort/ETA are shown as guidance only and never drive ordering.
+ *
+ * Sprint 18: path-level Roadmap Explainability panel (projection over the
+ * computed Roadmap). Per-step whyHere remains on each step row (ADR-0015).
  */
 import Link from "next/link";
 
+import { RoadmapExplanationPanel } from "@/components/roadmap-explanation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { explainRoadmap } from "@/lib/planning/roadmap-explanation";
 import type { Roadmap, RoadmapStep } from "@/lib/planning/roadmap-types";
 
 function StatusBadge({ step }: { step: RoadmapStep }) {
@@ -99,6 +104,7 @@ export function RoadmapView({
   roadmap: Roadmap;
   weeklyHours?: number | null;
 }) {
+  const explanation = explainRoadmap(roadmap);
   const completed = roadmap.steps.filter((s) => s.kind === "completed");
   const path = roadmap.steps.filter((s) => s.kind !== "completed");
 
@@ -132,6 +138,8 @@ export function RoadmapView({
           .
         </p>
       </div>
+
+      <RoadmapExplanationPanel explanation={explanation} />
 
       <Card>
         <CardHeader>

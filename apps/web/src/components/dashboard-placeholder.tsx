@@ -1,3 +1,4 @@
+import { ConstraintHoursEditor } from "@/components/constraint-hours-editor";
 import {
   Card,
   CardContent,
@@ -75,9 +76,14 @@ export function DashboardPlaceholder({
           </CardHeader>
           <CardContent>
             {constraint ? (
-              <p className="text-lg font-medium">
-                {constraint.available_hours_per_week} hours / week
-              </p>
+              <div>
+                <p className="text-lg font-medium">
+                  {constraint.available_hours_per_week} hours / week
+                </p>
+                <ConstraintHoursEditor
+                  currentHours={constraint.available_hours_per_week}
+                />
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">
                 No constraints yet.

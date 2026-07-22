@@ -2,15 +2,19 @@
  * Evidence subsystem service (Sprints 7–8).
  *
  * The ONLY writer of Evidence and of Evidence-derived Mastery/Confidence/status.
- * Two entry points feed the SAME core:
+ * Entry points feed the SAME core:
  *   - recordTaskCompletionEvidence  (Execution Engine signal, Tier 1 self-report)
  *   - recordReflectionEvidence      (confirmed Reflection, Tier 2 artifact)
+ *   - recordMasteryOverrideEvidence (user mastery correction, Tier 1 override)
  *
- * Both call `appendEvidenceAndFold`, which appends an immutable Evidence row and
+ * Each calls `appendEvidenceAndFold`, which appends an immutable Evidence row and
  * folds it into the overlay cache via the pure mastery policy. The overlay write
  * is incremental but applies the same `applyEvidence` fold as a full replay
  * would (mastery-policy.replaySkillOverlay), so the cache stays equal to a
  * from-scratch replay of the Evidence log (ADR-0004). Fail-loud, deterministic.
+ *
+ * Mastery Self-Report Override is Evidence (§5.5 / ADR-0012) — not an overlay
+ * write and not a Sprint-12 recommendation Override.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -22,11 +26,15 @@ import {
 import {
   DEFAULT_SELF_REPORT_IMPLIED_MASTERY,
   EVIDENCE_TYPE_TIER,
+  MASTERY_OVERRIDE_EVIDENCE_TYPE,
+  MASTERY_OVERRIDE_SCALE,
+  MASTERY_OVERRIDE_SCALE_VERSION,
   TASK_COMPLETION_EVIDENCE_SOURCE,
   TASK_COMPLETION_EVIDENCE_TYPE,
   type EvidenceSource,
   type EvidenceTier,
   type EvidenceType,
+  type MasteryOverrideLevelId,
 } from "./evidence-types";
 import {
   MASTERY_POLICY_VERSION,
@@ -50,6 +58,17 @@ export type RecordReflectionEvidenceInput = {
   skillKey: string;
   impliedMastery: number;
   /** Shared with reflection_confirmed History event. */
+  correlationId?: string;
+};
+
+/**
+ * What the Evidence subsystem needs from a mastery self-report override.
+ * Caller passes a scale level id; this module maps it to impliedMastery.
+ * Labels never reach the reducer.
+ */
+export type RecordMasteryOverrideInput = {
+  skillKey: string;
+  levelId: MasteryOverrideLevelId;
   correlationId?: string;
 };
 
@@ -124,6 +143,60 @@ export async function recordReflectionEvidence(
     source: "user",
     contentRef: input.reflectionId,
     generatedFromReflectionId: input.reflectionId,
+    correlationId: input.correlationId ?? newCorrelationId(),
+  });
+}
+
+/**
+ * Records a Tier-1 `self_report_override` Evidence row and folds it into the
+ * skill overlay. The claimed level is configuration → numeric impliedMastery
+ * only; confidence still follows Tier-1 ceiling (AR-04 / Principle 19).
+ *
+ * Locked skills are rejected (same gate as Reflection). content_ref stores a
+ * stable scale marker for audit (not UI labels).
+ */
+export async function recordMasteryOverrideEvidence(
+  supabase: SupabaseClient,
+  userId: string,
+  input: RecordMasteryOverrideInput,
+): Promise<void> {
+  const level = MASTERY_OVERRIDE_SCALE[input.levelId];
+  if (!level) {
+    throw new Error(`Unknown mastery override level: ${input.levelId}`);
+  }
+
+  const { data: overlay, error: overlayError } = await supabase
+    .from("user_skill_mastery")
+    .select("skill_key, status")
+    .eq("user_id", userId)
+    .eq("skill_key", input.skillKey)
+    .maybeSingle();
+
+  if (overlayError) {
+    throw new Error(
+      `Failed to load skill for mastery override: ${overlayError.message}`,
+    );
+  }
+  if (!overlay) {
+    throw new Error(`Skill not found in overlay: ${input.skillKey}`);
+  }
+  if (overlay.status === "locked") {
+    throw new Error(
+      "Cannot correct mastery for a locked skill — unlock it via prerequisites first.",
+    );
+  }
+
+  // content_ref: versioned scale id for audit; optional note is not persisted
+  // as a separate column — keep schema unchanged (note deferred / omit).
+  const contentRef = `mastery_override_scale_v${MASTERY_OVERRIDE_SCALE_VERSION}:${level.id}`;
+
+  await appendEvidenceAndFold(supabase, userId, {
+    skillKey: input.skillKey,
+    type: MASTERY_OVERRIDE_EVIDENCE_TYPE,
+    tier: EVIDENCE_TYPE_TIER[MASTERY_OVERRIDE_EVIDENCE_TYPE],
+    impliedMastery: level.impliedMastery,
+    source: "user",
+    contentRef,
     correlationId: input.correlationId ?? newCorrelationId(),
   });
 }

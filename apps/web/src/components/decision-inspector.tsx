@@ -3,7 +3,8 @@
  *
  * Shows every candidate and its per-factor values in ranked order, so we can
  * verify the deterministic lexicographic ranking is behaving as intended.
- * Not a user-facing feature.
+ * Engineering / debugging surface — founder-facing explainability lives on the
+ * Recommendation card (ADR-0014).
  */
 import type { RankingResult } from "@/lib/decision-engine/types";
 

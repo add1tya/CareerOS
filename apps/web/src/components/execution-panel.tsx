@@ -1,4 +1,5 @@
 import { completeTask } from "@/app/dashboard/actions";
+import { SkipTaskForm } from "@/components/override-forms";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Renders the deterministic execution hierarchy for the current recommendation:
- * Mission -> active Quest -> Today's Tasks. The only interaction is completing a
+ * Mission -> active Quest -> Today's Tasks. Interactions: complete or skip a
  * task; quest/mission progress is derived server-side.
  */
 export function ExecutionPanel({ result }: { result: ExecutionPlanResult }) {
@@ -96,41 +97,50 @@ function ExecutionPlanView({ plan }: { plan: ExecutionPlan }) {
 
 function TaskRow({ task }: { task: TaskInstance }) {
   const isDone = task.status === "completed";
+  const isSkipped = task.status === "skipped";
+  const isResolved = isDone || isSkipped;
 
   return (
-    <li className="flex items-start justify-between gap-3 rounded-lg border p-3">
-      <div className="min-w-0">
-        <p
-          className={cn(
-            "text-sm font-medium",
-            isDone && "text-muted-foreground line-through",
-          )}
-        >
-          {task.title}
-        </p>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {task.description}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          ~{task.estimatedMinutes} min
-        </p>
-      </div>
-
-      {isDone ? (
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-          Done
-        </span>
-      ) : (
-        <form action={completeTask} className="shrink-0">
-          <input type="hidden" name="taskId" value={task.id} />
-          <button
-            type="submit"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+    <li className="rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "text-sm font-medium",
+              isResolved && "text-muted-foreground line-through",
+            )}
           >
-            Complete
-          </button>
-        </form>
-      )}
+            {task.title}
+          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {task.description}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            ~{task.estimatedMinutes} min
+          </p>
+        </div>
+
+        {isDone ? (
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            Done
+          </span>
+        ) : isSkipped ? (
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            Skipped
+          </span>
+        ) : (
+          <form action={completeTask} className="shrink-0">
+            <input type="hidden" name="taskId" value={task.id} />
+            <button
+              type="submit"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Complete
+            </button>
+          </form>
+        )}
+      </div>
+      {!isResolved ? <SkipTaskForm taskId={task.id} /> : null}
     </li>
   );
 }

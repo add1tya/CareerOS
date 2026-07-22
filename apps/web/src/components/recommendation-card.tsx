@@ -5,6 +5,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { OverrideRecommendationForm } from "@/components/override-forms";
+import { RecommendationExplanation } from "@/components/recommendation-explanation";
+import type { DecisionExplanation } from "@/lib/decision-engine/explainability-types";
 import type {
   RecommendationConfidence,
   SkillRecommendation,
@@ -27,8 +30,10 @@ function ConfidenceBadge({ confidence }: { confidence: RecommendationConfidence 
 
 export function RecommendationCard({
   recommendation,
+  explanation,
 }: {
   recommendation: SkillRecommendation | null;
+  explanation: DecisionExplanation | null;
 }) {
   if (!recommendation) {
     return (
@@ -36,8 +41,9 @@ export function RecommendationCard({
         <CardHeader>
           <CardTitle>What should I learn next?</CardTitle>
           <CardDescription>
-            No skill is available to recommend yet. Once prerequisites are met,
-            your next-best skill will appear here.
+            No skill is available to recommend yet. Once prerequisites are met
+            (and none are suppressed by an override), your next-best skill will
+            appear here.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -53,13 +59,15 @@ export function RecommendationCard({
           <ConfidenceBadge confidence={recommendation.confidence} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-4">
         <p className="text-sm text-foreground">{recommendation.narrative}</p>
+        <RecommendationExplanation explanation={explanation} />
         <p className="text-xs text-muted-foreground">
-          Determined from prerequisite structure and skill tier. It stays fixed
-          on the skill you are working as you record progress, and updates once a
-          skill is fully mastered — it is not yet weighted by mastery level.
+          Ranking is unchanged by this explanation. Overrides are signal, not
+          errors — rejecting a skill excludes it from eligibility until new
+          Evidence on that skill is recorded.
         </p>
+        <OverrideRecommendationForm recommendationId={recommendation.id} />
       </CardContent>
     </Card>
   );

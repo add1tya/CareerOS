@@ -6,6 +6,8 @@
  * The recommendation is a Skill, never a Task. No AI is involved.
  */
 
+import type { DecisionExplanation } from "@/lib/decision-engine/explainability-types";
+
 /**
  * Deterministic Decision Engine confidence — how decisively the winner beat the
  * next-best candidate on the documented ranking factors. This is NOT AI
@@ -54,8 +56,13 @@ export type SkillRecommendation = {
   generatedAt: string | null;
 };
 
-/** What the dashboard consumes: the recommendation (card) + ranking (inspector). */
+/**
+ * What the dashboard consumes: recommendation (card) + ranking (inspector) +
+ * structured explanation (founder-facing, from persisted factors — ADR-0014).
+ */
 export type DecisionEngineOutput = {
   recommendation: SkillRecommendation | null;
   ranking: RankingResult;
+  /** Null when no recommendation or persisted factors are unusable. */
+  explanation: DecisionExplanation | null;
 };

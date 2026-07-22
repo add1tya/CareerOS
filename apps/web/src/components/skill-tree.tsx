@@ -10,6 +10,9 @@
  * Layout is deterministic: tiers by ontology_category, ordered within a tier by
  * the ontology's display_order. Mastery and Confidence are shown as distinct
  * dimensions (product Principle 19), even here.
+ *
+ * Sprint 15: mastery self-report override lives here (skill-centric), not on
+ * Reflection — correcting an estimate is Evidence on a skill (§5.5 / ADR-0012).
  */
 import { useMemo } from "react";
 import {
@@ -22,6 +25,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import {
+  MasteryOverrideForm,
+  type CorrectableSkill,
+} from "@/components/mastery-override-form";
 import type {
   OntologyCategory,
   SkillDomain,
@@ -113,6 +120,21 @@ export function SkillTreeInspector({ graph }: { graph: SkillGraph }) {
     return { nodes: flowNodes, edges: flowEdges };
   }, [graph]);
 
+  const correctableSkills: CorrectableSkill[] = useMemo(
+    () =>
+      [...graph.nodes]
+        .filter((n) => n.status !== "locked")
+        .sort((a, b) => a.display_order - b.display_order)
+        .map((n) => ({
+          skillKey: n.skill_key,
+          name: n.name,
+          mastery: n.mastery,
+          confidence: n.confidence,
+          status: n.status,
+        })),
+    [graph],
+  );
+
   return (
     <section className="mt-6 space-y-2">
       <div>
@@ -150,6 +172,15 @@ export function SkillTreeInspector({ graph }: { graph: SkillGraph }) {
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable />
         </ReactFlow>
+      </div>
+
+      <div className="rounded-lg border p-4">
+        <h3 className="text-base font-semibold tracking-tight">
+          Correct mastery estimate
+        </h3>
+        <div className="mt-3">
+          <MasteryOverrideForm skills={correctableSkills} />
+        </div>
       </div>
     </section>
   );

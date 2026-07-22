@@ -14,8 +14,9 @@
  *      dependents. Repeat until the path is complete.
  *
  * Because step 2 reuses the same comparator over the same initially-eligible
- * pool, the first placed skill is identical to the Decision Engine winner — the
- * current Recommendation is, by construction, the head of the Roadmap.
+ * pool (after optional Override suppression), the first placed skill is
+ * identical to the Decision Engine winner — the current Recommendation is, by
+ * construction, the head of the Roadmap.
  *
  * Invariants (see ADR-0006):
  *   - Completed skills always appear first.
@@ -65,7 +66,9 @@ function edgeSatisfiedNow(
 export function computeRoadmap(
   graph: SkillGraph,
   goalTitle: string | null,
+  options?: { suppressedSkillKeys?: ReadonlySet<string> },
 ): Roadmap {
+  const suppressed = options?.suppressedSkillKeys ?? new Set<string>();
   const ctx = buildRankingContext(graph);
   const nodeByKey = new Map(graph.nodes.map((n) => [n.skill_key, n]));
 
@@ -82,9 +85,13 @@ export function computeRoadmap(
     .filter((n) => COMPLETED_STATUSES.has(n.status))
     .sort((a, b) => a.display_order - b.display_order);
 
-  // Forward path pool: everything not already completed and not excluded.
+  // Forward path pool: not completed, not status-excluded, not override-suppressed.
+  // Suppression is eligibility only — compareByFactors is unchanged (ADR-0009).
   const pool = graph.nodes.filter(
-    (n) => !COMPLETED_STATUSES.has(n.status) && !EXCLUDED_STATUSES.has(n.status),
+    (n) =>
+      !COMPLETED_STATUSES.has(n.status) &&
+      !EXCLUDED_STATUSES.has(n.status) &&
+      !suppressed.has(n.skill_key),
   );
 
   // Greedy topological ordering using the Decision Engine comparator.

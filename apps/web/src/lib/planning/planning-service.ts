@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getCareerGraph } from "@/lib/career-graph-service";
+import { getSuppressedSkillKeys } from "@/lib/override/override-service";
 import { computeRoadmap } from "@/lib/planning/roadmap-computer";
 import type { Roadmap } from "@/lib/planning/roadmap-types";
 import { getSkillGraph } from "@/lib/skill-graph/skill-graph-service";
@@ -19,15 +20,21 @@ import { getSkillGraph } from "@/lib/skill-graph/skill-graph-service";
  * Computes the user's current Roadmap. Deterministic given the stored Skill
  * Graph state (AR-08): identical state -> identical Roadmap. Recomputed on every
  * call; nothing is cached or stored.
+ *
+ * Applies the same Override-derived suppression as the Decision Engine so
+ * head(Roadmap) stays aligned with the current Recommendation.
  */
 export async function getRoadmap(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Roadmap> {
-  const [skillGraph, careerGraph] = await Promise.all([
+  const [skillGraph, careerGraph, suppressed] = await Promise.all([
     getSkillGraph(supabase, userId),
     getCareerGraph(supabase, userId),
+    getSuppressedSkillKeys(supabase, userId),
   ]);
 
-  return computeRoadmap(skillGraph, careerGraph.rootGoal?.title ?? null);
+  return computeRoadmap(skillGraph, careerGraph.rootGoal?.title ?? null, {
+    suppressedSkillKeys: suppressed,
+  });
 }
