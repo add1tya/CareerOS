@@ -53,6 +53,36 @@ export function AppShell({ children, userEmail }: AppShellProps) {
                 >
                   Reflect
                 </Link>
+                <Link
+                  href="/evidence/extract"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Extract
+                </Link>
+                <Link
+                  href="/resume"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Resume
+                </Link>
+                <Link
+                  href="/portfolio"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Portfolio
+                </Link>
+                <Link
+                  href="/gap-analysis"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Gaps
+                </Link>
+                <Link
+                  href="/capabilities"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Capabilities
+                </Link>
               </nav>
             ) : null}
           </div>

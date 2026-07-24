@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DecisionTraceNarrative } from "@/components/decision-trace-narrative";
 import { OverrideRecommendationForm } from "@/components/override-forms";
 import { RecommendationExplanation } from "@/components/recommendation-explanation";
 import type { DecisionExplanation } from "@/lib/decision-engine/explainability-types";
@@ -62,6 +63,7 @@ export function RecommendationCard({
       <CardContent className="space-y-4">
         <p className="text-sm text-foreground">{recommendation.narrative}</p>
         <RecommendationExplanation explanation={explanation} />
+        <DecisionTraceNarrative recommendationId={recommendation.id} />
         <p className="text-xs text-muted-foreground">
           Ranking is unchanged by this explanation. Overrides are signal, not
           errors — rejecting a skill excludes it from eligibility until new

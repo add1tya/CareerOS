@@ -4,6 +4,8 @@
 
 Stores versioned AI prompt templates used at runtime by the AI Engine and related services. Separating prompts from application code enables independent iteration, testing, and auditability.
 
+**Runtime note (ADR-0020):** Next loads prompts from `apps/web/src/lib/ai/registered-prompts.ts` (version-checked, read-only). Keep markdown review copies here and under `apps/web/prompts/` in sync when editing.
+
 ## What belongs here
 
 - System prompts, user prompt templates, and few-shot examples

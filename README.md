@@ -36,3 +36,12 @@ Run the migrations in `supabase/migrations/` (in filename order) in the Supabase
 8. `20260716000008_reflections.sql` — Reflection v1 (confirmation-gated self-assessment → evidence)
 9. `20260716000009_history_events.sql` — History Event Log v1 (append-only Career Graph audit timeline)
 10. `20260716000010_overrides.sql` — Overrides as Signal v1 (append-only intent; suppression derived)
+11. `20260721000011_constraint_updated_history.sql` — Constraint Change History for Opportunity
+12. `20260722000012_ai_invocations.sql` — AI Adapter provenance (append-only; ADR-0020)
+13. `20260722000013_evidence_extraction.sql` — Evidence Extraction sessions (ADR-0022)
+14. `20260722000014_decision_trace_narratives.sql` — Decision Trace Narrator (ADR-0023)
+15. `20260724000015_resume_drafts.sql` — Resume Intelligence drafts (ADR-0024)
+16. `20260725000016_career_gap_reports.sql` — Career Gap Analysis reports (ADR-0025)
+17. `20260725000017_portfolio_drafts.sql` — Portfolio Intelligence drafts (ADR-0028)
+
+Optional AI adapter env (server-only): `AI_PROVIDER=null|anthropic|gemini`, plus `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` — see `.env.example`.

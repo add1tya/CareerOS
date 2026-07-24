@@ -6,6 +6,7 @@
  *   - recordTaskCompletionEvidence  (Execution Engine signal, Tier 1 self-report)
  *   - recordReflectionEvidence      (confirmed Reflection, Tier 2 artifact)
  *   - recordMasteryOverrideEvidence (user mastery correction, Tier 1 override)
+ *   - recordExtractionEvidence      (confirmed extraction proposals, ADR-0022)
  *
  * Each calls `appendEvidenceAndFold`, which appends an immutable Evidence row and
  * folds it into the overlay cache via the pure mastery policy. The overlay write
@@ -69,6 +70,16 @@ export type RecordReflectionEvidenceInput = {
 export type RecordMasteryOverrideInput = {
   skillKey: string;
   levelId: MasteryOverrideLevelId;
+  correlationId?: string;
+};
+
+/** Confirmed extraction proposal → Evidence (ADR-0022). */
+export type RecordExtractionEvidenceInput = {
+  extractionId: string;
+  proposalId: string;
+  skillKey: string;
+  evidenceType: EvidenceType;
+  impliedMastery: number;
   correlationId?: string;
 };
 
@@ -201,6 +212,28 @@ export async function recordMasteryOverrideEvidence(
   });
 }
 
+/**
+ * Records Tier-appropriate Evidence from a CONFIRMED extraction proposal.
+ * Does not call AI. Idempotent via unique (extraction_id, skill_key).
+ */
+export async function recordExtractionEvidence(
+  supabase: SupabaseClient,
+  userId: string,
+  input: RecordExtractionEvidenceInput,
+): Promise<string | null> {
+  return appendEvidenceAndFold(supabase, userId, {
+    skillKey: input.skillKey,
+    type: input.evidenceType,
+    tier: EVIDENCE_TYPE_TIER[input.evidenceType],
+    impliedMastery: input.impliedMastery,
+    source: "user",
+    contentRef: `extraction:${input.extractionId}:proposal:${input.proposalId}`,
+    generatedFromExtractionId: input.extractionId,
+    correlationId: input.correlationId ?? newCorrelationId(),
+  });
+}
+
+
 type EvidenceWrite = {
   skillKey: string;
   type: EvidenceType;
@@ -210,6 +243,7 @@ type EvidenceWrite = {
   contentRef: string | null;
   generatedFromTaskId?: string | null;
   generatedFromReflectionId?: string | null;
+  generatedFromExtractionId?: string | null;
   correlationId: string;
 };
 
@@ -244,6 +278,7 @@ async function appendEvidenceAndFold(
       source: write.source,
       generated_from_task_id: write.generatedFromTaskId ?? null,
       generated_from_reflection_id: write.generatedFromReflectionId ?? null,
+      generated_from_extraction_id: write.generatedFromExtractionId ?? null,
       mastery_policy_version: MASTERY_POLICY_VERSION,
     })
     .select("id")

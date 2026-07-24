@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+import { AiAdapterStatusPanel } from "@/components/ai-adapter-status";
 import { AppShell } from "@/components/app-shell";
 import { DashboardPlaceholder } from "@/components/dashboard-placeholder";
 import { DecisionInspector } from "@/components/decision-inspector";
@@ -14,6 +15,7 @@ import { RecoveryPanel } from "@/components/recovery-panel";
 import { RiskPanel } from "@/components/risk-panel";
 import { SkillRelationshipExplorer } from "@/components/skill-relationship-explorer";
 import { SkillTreeInspector } from "@/components/skill-tree";
+import { getAiAdapterStatus } from "@/lib/ai/ai-adapter-service";
 import {
   getCareerGraph,
   initializeCareerGraph,
@@ -84,6 +86,9 @@ export default async function DashboardPage() {
     roadmap,
   });
 
+  // Config-only — no model call. Domain engines do not import the adapter.
+  const aiAdapterStatus = getAiAdapterStatus();
+
   // Execution plan is derived from the recommendation, so it runs after it.
   const executionPlan = await getOrCreateExecutionPlan(
     supabase,
@@ -116,6 +121,7 @@ export default async function DashboardPage() {
         initialSkillKey={decision.recommendation?.recommendedSkillKey ?? null}
       />
       <SkillTreeInspector graph={skillGraph} />
+      <AiAdapterStatusPanel initialStatus={aiAdapterStatus} />
     </AppShell>
   );
 }

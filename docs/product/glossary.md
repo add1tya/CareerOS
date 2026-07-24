@@ -28,6 +28,9 @@ A user-specific, per-Skill measure of demonstrated competence, expressed on a de
 ### Confidence
 A user-specific, per-Skill measure of how verified the current Mastery estimate is. Independent of Mastery (Principle 19): higher claimed Mastery does not imply higher Confidence. Confidence is floored by Evidence tier ceilings (non-additive).
 
+### Evidence Extraction Assistant
+A confirmation-gated AI Adapter consumer that turns an unstructured learning artifact into structured Evidence **proposals**. Proposal confidence is presentation-only. Evidence and Mastery change only after explicit user confirmation via the Evidence Service (ADR-0022). Distinct from Reflection (structured self-assessment, no LLM) and from Mentor Chat.
+
 ### Evidence
 An append-only record that supports a change to Mastery and/or Confidence for a Skill. Mastery and Confidence change only via Evidence (AR-04). Types include self-report, reflection, and self-report override, among others documented in the Skill Graph schema.
 
@@ -79,14 +82,41 @@ The smallest actionable unit of work surfaced to the user, typically completable
 ### Daily Task Engine
 The component of the Decision Engine responsible specifically for surfacing the highest-value Task(s) for the current day, given available hours (a Constraint) and current Skill Graph state. Distinct from the broader Roadmap, which operates at Mission/Quest granularity over a longer horizon.
 
+### AI Adapter
+The infrastructure shell (AI Tasks + AI Runtime + Providers) that lets CareerOS call LLMs with versioned prompts, structured validation, timeouts/retries, and append-only invocation provenance. Provider-independent (`null`, `anthropic`, `gemini`); does not own Decision, Planning, Mastery, History, or Goal state (ADR-0020, ADR-0021). Distinct from AI Mentor (product conversation) and from Decision Engine (deterministic ranking in V1).
+
+### Capability Registry
+A deterministic, code-owned catalog of Capability Manifests for discovery by orchestrators. Holds metadata only (id, version, mutability, slots, dependencies); never executes capabilities or owns business logic (ADR-0027). Distinct from Career Copilot (orchestration) and from AI Runtime (LLM transport).
+
+### Capability Manifest
+The self-description of one CareerOS capability: stable immutable `id`, presentation-only `displayName`, category, mutability, required slots, optional dependency ids, and version fields. Validated against `CAPABILITY_MANIFEST_SCHEMA_VERSION` (ADR-0027).
+
+### AI Task
+A typed, versioned unit of LLM work: input/output schemas, prompt reference, and input construction. Does not own retries, validation, or provider SDKs (ADR-0020).
+
+### AI Runtime
+The adapter orchestrator that loads prompts, calls a Provider, enforces timeout/cancellation/retries, validates structured output, and records provenance. Only validated task DTOs leave Runtime (ADR-0020).
+
 ### AI Mentor
-The conversational interface (Mentor Chat) through which the user interacts with the Decision Engine in natural language — asking questions, requesting re-explanation of a recommendation, or requesting a re-plan. The AI Mentor surfaces the Decision Engine's reasoning; it is not a separate reasoning system from it.
+The conversational interface (Mentor Chat) through which the user interacts with the Decision Engine in natural language — asking questions, requesting re-explanation of a recommendation, or requesting a re-plan. The AI Mentor surfaces the Decision Engine's reasoning; it is not a separate reasoning system from it. Deferred until after AI Adapter Architecture.
 
 ### Mentor Chat
 The specific product surface (UI feature) implementing the AI Mentor. "AI Mentor" refers to the reasoning persona/capability; "Mentor Chat" refers to the screen/interface.
 
 ### Reasoning Trace
 The stored, human-readable explanation attached to any Decision Engine output (a recommended Task, a re-prioritized Skill, a Roadmap change), describing which Goal, Constraint, and Skill Graph state produced that output. Required per Guiding Principle 11; never regenerated inconsistently on demand. In V1 skill recommendations, the immutable `skill_recommendations` row (narrative + factor snapshot) is the trace substrate; a separate `reasoning_traces` table remains deferred (ADR-0014).
+
+### Resume Intelligence
+An AI Adapter consumer that composes resume-ready prose from deterministic Resume Facts (Career Graph reads). Sections organize facts; drafts are append-only and never write back to domain state. Distinct from Export (serialization) (ADR-0024).
+
+### Career Gap Analysis
+An AI Adapter consumer that summarizes verified strengths, missing evidence (no verified Evidence), and weak mastery (Evidence present but low mastery) from deterministic Gap Facts. Present-tense only; never plans, predicts, or writes domain state. Distinct from Goal Progress Explainability and from Planning (ADR-0025).
+
+### Portfolio Intelligence
+An AI Adapter consumer that composes a proof-oriented technical portfolio from deterministic Portfolio Facts (verified Evidence, skills, learning chronology). Featured project order and timeline order are fixed before AI; drafts are append-only content snapshots — not websites or publishing (ADR-0028). Distinct from Resume Intelligence (hiring document).
+
+### Data Export
+A read-only ownership capability that assembles and downloads the user’s CareerOS data in plain Markdown or JSON. Does not compose resume prose (ADR-0008).
 
 ### Decision Explanation
 A structured, founder-facing projection of a persisted decision factor snapshot into declarative answers (why this skill, why now, why not the runner-up, if skipped, goal alignment). Pure read model — does not change ranking (ADR-0014). Distinct from DecisionInspector (engineering factor table) and from Claude-generated prose.
